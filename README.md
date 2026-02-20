@@ -1,0 +1,1 @@
+# Analisi-Social-Progress-Index-2022
