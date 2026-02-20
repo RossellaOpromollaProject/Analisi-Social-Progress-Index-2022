@@ -1,0 +1,1297 @@
+---
+title: "Analisi Social Progress Index 2022"
+author: "Rossella Opromolla"
+date: "`23.01.2026`"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+  html_document:
+    toc: true
+    df_print: paged
+  word_document:
+    toc: true
+fontsize: 11pt
+geometry: margin=1in
+---
+
+
+\newpage
+# Introduzione
+
+## Il Contesto: Social Progress Index 2022
+
+Il *Social Progress Index* (SPI) è un indicatore composito sviluppato dal *Social Progress Imperative* con l’obiettivo di misurare il livello di progresso sociale dei paesi, andando oltre i tradizionali indicatori economici come il Prodotto Interno Lordo (PIL). Il SPI valuta infatti la capacità di una società di soddisfare i bisogni fondamentali dei cittadini, garantire condizioni di benessere e offrire opportunità di sviluppo personale e sociale.
+
+L’indice si articola in tre dimensioni principali:
+
+- **Basic Human Needs**, che include aspetti quali nutrizione, assistenza sanitaria e sicurezza;
+
+- **Foundations of Wellbeing**, che comprende istruzione, accesso all’informazione, salute e sostenibilità ambientale;
+
+- **Opportunity**, che misura diritti personali, libertà individuali, inclusione e accesso all’istruzione avanzata.
+
+Ciascuna dimensione è a sua volta suddivisa in componenti e indicatori specifici, consentendo una valutazione multidimensionale del progresso sociale.
+
+Il dataset utilizzato in questo report, relativo al *Social Progress Index 2022*, raccoglie i punteggi e i ranking dei paesi per ciascuna dimensione e per l’indice complessivo, permettendo un’analisi comparativa a livello globale. 
+
+L’anno 2022 rappresenta un contesto particolarmente rilevante in quanto riflette gli effetti sociali e strutturali del periodo post-pandemico, oltre alle crescenti sfide legate alla sostenibilità, alle disuguaglianze e alla stabilità sociale. L’analisi di questi dati consente quindi di osservare come i diversi paesi abbiano risposto a tali criticità in termini di progresso sociale.
+
+
+## Fonte 
+
+https://www.socialprogress.org/
+
+## Struttura del report
+
+Il report è strutturato nelle seguenti fasi:
+
+1. **Analisi Esplorativa dei Dati (EDA)**  
+   Analisi preliminare del dataset attraverso statistiche descrittive, distribuzioni, visualizzazioni grafiche e studio delle    correlazioni, al fine di identificare pattern, anomalie, outlier e relazioni preliminari tra le variabili.
+
+2. **Analisi delle Componenti Principali (PCA)**  
+   Riduzione della dimensionalità e analisi della struttura latente dei dati.
+
+3. **Clustering**  
+   Individuazione di gruppi omogenei di paesi sulla base delle caratteristiche di progresso sociale.
+
+4. **Regressione Lineare Semplice e Multipla**  
+   Analisi delle relazioni tra l’indice complessivo e le sue componenti.
+
+Le sezioni successive verranno sviluppate progressivamente nel corso dell’analisi.
+ 
+
+## Librerie utilizzate 
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(tidyverse)
+library(psych)
+library(ggplot2)
+library(corrplot)
+library(factoextra)
+library(knitr)
+library(cluster)
+library(MASS)
+library(dplyr)
+library(sandwich)
+library(lmtest)
+library(tidyr)
+library(mclust)
+library(car)
+```
+
+Le principali librerie utilizzate sono:
+
+- **tidyverse**: importazione, manipolazione e visualizzazione dei dati.  
+
+- **psych**: statistiche descrittive avanzate e strumenti esplorativi.  
+
+- **corrplot**: visualizzazione delle matrici di correlazione.  
+
+- **factoextra**: grafici e diagnostica per PCA e clustering.  
+
+- **cluster**: algoritmi di clustering.  
+
+- **MASS**: funzioni statistiche per modelli classici.
+
+- **sandwich**, **lmtest**: stima di errori standard robusti e test sui modelli lineari.
+
+- **knitr**: creazione e formattazione di tabelle nei report.
+
+- **tidy**: riorganizzazione e pulizia dei dati (trasformazioni da formato wide a long e viceversa, gestione dei valori mancanti).
+
+- **dplyr**:manipolazione dei dati tramite operazioni di filtro, selezione, ordinamento, aggregazione e creazione di nuove variabili.
+
+\newpage
+# Analisi Esplorativa dei Dati (EDA)
+
+L’analisi esplorativa dei dati ha l’obiettivo di individuare pattern, relazioni e anomalie presenti nel dataset. Questa fase preliminare combina l’utilizzo di tabelle riassuntive e visualizzazioni grafiche per supportare le osservazioni e guidare le successive fasi di analisi.
+
+Saranno utilizzati grafici univariati, come istogrammi e boxplot, e grafici multivariati, quali scatterplot e matrici di correlazione, al fine di ottenere una visione completa della struttura dei dati.
+
+```{r}
+data <- read.csv("C:\\Users\\rosse\\OneDrive\\Desktop\\Social Progress Index 2022.csv")
+```
+
+Il dataset viene caricato in un oggetto denominato `data`.  
+Successivamente, si analizzano dimensioni, struttura e tipologia delle variabili.
+
+```{r}
+dim(data)
+```
+
+Il dataset è composto da 169 osservazioni e 18 variabili, dove le righe rappresentano i paesi e le colonne le variabili di interesse.
+
+```{r}
+head(data)
+```
+
+Il comando `head()` restituisce le prime osservazioni del dataset, cosi da consentirci una prima ispezione dei dati.
+
+```{r}
+names(data)
+```
+
+Il comando `names()` restituisce i nomi di tutte le variabili del dataset, consentendo una verifica delle colonne.
+
+```{r}
+str(data)
+```
+
+Il comando `str()` restituisce tutte le variabili del dataset e la tipologia, dove le variabili possono essere di tipo intero, carattere o numerico.
+L’analisi della struttura mostra che le variabili *Country* e *Rank* sono di tipo carattere, mentre le restanti variabili sono numeriche.
+
+```{r}
+sapply(data,class)
+```
+
+Il comando `sapply()` consente di ottenere in modo sintetico la classe di ciascuna variabile.
+
+
+Un aspetto rilevante riguarda la presenza di valori mancanti. 
+
+```{r}
+sum(is.na(data))
+```
+
+Il controllo evidenzia un totale di 64 valori NA, distribuiti su diverse variabili. 
+Poiché il numero di osservazioni mancanti è limitato e distribuito in modo uniforme, si procede alla loro eliminazione tramite omissione delle righe incomplete.
+I valori mancanti vengono quindi analizzati e successivamente rimossi dal dataset.
+
+```{r}
+colSums(is.na(data))
+```
+
+Questo comando permette di fare il conteggio dei NA per ogni colonna e di capire anche dove si distribuiscono.
+
+Vediamo che abbiamo 4 NA per ogni colonna tranne in *Rank* e *Country*.
+
+Si procede quindi alla rimozione delle osservazioni incomplete.
+
+```{r}
+data <- na.omit(data)
+```
+
+Il risultato è stato sovrascritto in data.
+In questo modo il dataset non ha più valori mancanti ma avrà meno osservazioni.
+
+Dopo la pulizia del nostro dataset andiamo avanti e proseguiamo con le analisi.
+
+## Variabili 
+
+-Generali
+
+**Rank**: posizione del Paese nella classifica del Social Progress Index.
+
+**Country**: nome del Paese.
+
+**Social.Progress.Score**: punteggio complessivo (0–100) del progresso sociale.
+
+-Macroaree
+
+**Basic.Human.Needs**: soddisfazione dei bisogni umani fondamentali.
+
+**Foundations.of.Wellbeing**: condizioni per una vita sana e informata.
+
+**Opportunity**: diritti, libertà e opportunità di sviluppo individuale.
+
+-Componenti di Basic Human Needs
+
+**Nutrition.and.Basic.Medical.Care**: accesso a cibo e cure mediche di base.
+
+**Water.and.Sanitation**: accesso ad acqua potabile e servizi igienici.
+
+**Shelter**: qualità dell’alloggio e accesso ai servizi essenziali.
+
+**Personal.Safety**: livello di sicurezza personale.
+
+-Componenti di Foundations of Wellbeing
+
+**Access.to.Basic.Knowledge**: accesso all’istruzione di base.
+
+**Access.to.Information.and.Communications**: accesso a internet e mezzi di informazione.
+
+**Health.and.Wellness**: stato di salute generale della popolazione.
+
+**Environmental.Quality**: qualità dell’ambiente.
+
+-Componenti di Opportunity
+
+**Personal.Rights**: tutela dei diritti civili e politici.
+
+**Personal.Freedom.and.Choice**: libertà individuale nelle scelte di vita.
+
+**Inclusiveness**: livello di inclusione sociale.
+
+**Access.to.Advanced.Education**: accesso all’istruzione superiore.
+
+
+## Analisi descrittiva
+
+Poiché l’analisi descrittiva richiede esclusivamente variabili di tipo quantitativo, si procede alla costruzione di un nuovo dataset contenente solo le variabili numeriche, escludendo **Rank** e **Country** in quanto non numeriche.
+
+```{r}
+
+data_num <- dplyr::select(data, where(is.numeric))
+
+```
+
+Di seguito sono riportate le prime righe del dataset limitatamente alle prime sei variabili numeriche.  
+
+```{r}
+
+print(head(data_num[, 1:6]))
+
+```
+
+Sul dataset così ottenuto viene effettuata un’analisi descrittiva tramite la funzione `describe()`  della libreria psych, che restituisce per ciascuna variabile numerica le principali statistiche riassuntive. L’output fornisce, per ogni variabile, le principali misure di posizione, dispersione e forma, inclusi media, mediana, deviazione standard, estremi, asimmetria e curtosi
+
+```{r}
+describe(data_num)
+```
+
+Dall’analisi descrittiva delle variabili numeriche si osserva che il **Social.Progress.Score** ha una media pari a 66.30, leggermente inferiore alla mediana (67.21), indicando una lieve asimmetria negativa della distribuzione.
+
+Tra le tre dimensioni principali, **Basic.Human.Needs** presenta una mediana nettamente superiore alla media e una marcata asimmetria negativa, mentre **Foundations.of.Wellbeing** mostra una distribuzione quasi simmetrica. La variabile **Opportunity** presenta invece una lieve asimmetria positiva, con una media leggermente superiore alla mediana.
+
+Analizzando le singole componenti, **Nutrition.and.Basic.Medical.Care**, **Water.and.Sanitation** e **Shelter** mostrano tutte una distribuzione asimmetrica verso sinistra, suggerendo che la maggior parte dei Paesi ottiene punteggi elevati, ma con alcuni valori sensibilmente più bassi.
+
+Alcune variabili, in particolare **Water.and.Sanitation**, **Shelter**, **Access.to.Basic.Knowledge** e **Access.to.Information.and.Communications**, presentano un range molto ampio, indicando una forte eterogeneità tra i Paesi. Questo è confermato anche dai valori elevati di deviazione standard, che segnalano una maggiore dispersione dei dati attorno alla media.
+
+Al contrario, **Personal.Safety** mostra una variabilità più contenuta, con valori più simili tra i diversi Paesi. Infine, i valori di curtosi risultano generalmente negativi, indicando distribuzioni più appiattite rispetto alla normale, con la sola eccezione di **Water.and.Sanitation**, che presenta una lieve concentrazione dei valori attorno alla media.
+
+Poiché nel dataset è presente anche la variabile **Country**, che identifica i Paesi analizzati e non rappresenta una misura quantitativa, essa viene trattata come variabile categoriale. Al fine di evitare interpretazioni statistiche non corrette e di consentire eventuali analisi per gruppi o rappresentazioni grafiche, si procede pertanto alla sua trasformazione in fattore.
+
+```{r}
+data$Country <- as.factor(data$Country)
+
+```
+
+\newpage
+# Analisi grafica univariata 
+
+## Istogrammi 
+
+```{r}
+
+par(mfrow = c(2,5))
+par(cex = 0.43)
+
+for (i in 1:10) {
+  truehist(data_num[[i]],
+           main = paste("Hist di", colnames(data_num)[i]),
+           col = "#6BAED6",     
+           xlab = colnames(data_num)[i]) 
+}
+
+
+```
+
+Per la rappresentazione grafica delle distribuzioni è stata utilizzata la funzione `truehist()` del pacchetto MASS, che consente una visualizzazione più accurata della forma delle distribuzioni rispetto all’istogramma standard.
+
+Gli istogrammi mostrano come sono distribuite le variabili del **Social Progress Index** nei diversi Paesi. In generale, molte variabili presentano una distribuzione non perfettamente simmetrica, con una maggiore concentrazione dei valori nella parte medio-alta e una coda più lunga verso i valori più bassi. Questo indica che la maggior parte dei Paesi ottiene punteggi relativamente elevati, mentre solo pochi presentano condizioni particolarmente svantaggiate. La presenza di queste code suggerisce inoltre la possibile esistenza di outlier, che verranno analizzati più avanti.
+
+Entrando nel dettaglio, il **Social.Progress.Score** mostra una distribuzione concentrata su valori medio-alti, evidenziando che la maggior parte dei Paesi presenta livelli di progresso sociale discreti o buoni, mentre sono pochi quelli con valori molto bassi.
+
+Le dimensioni principali dell’indice, ovvero **Basic.Human.Needs** e **Foundations.of.Wellbeing**, presentano distribuzioni simili, con valori prevalentemente elevati e una leggera asimmetria verso sinistra. Questo suggerisce che, per molti Paesi, i bisogni fondamentali e le condizioni di benessere sono in larga parte soddisfatti, anche se rimangono alcuni casi critici.
+
+La variabile **Opportunity** mostra invece una distribuzione più ampia e una maggiore dispersione dei valori, indicando differenze più marcate tra i Paesi per quanto riguarda diritti, libertà e opportunità individuali.
+
+Analizzando le singole componenti, **Nutrition.and.Basic.Medical.Care**, **Water.and.Sanitation** e **Shelter** risultano fortemente concentrate su valori alti, segno che molti Paesi garantiscono livelli adeguati di servizi essenziali; tuttavia, la presenza di una coda sinistra evidenzia alcuni Paesi con condizioni decisamente peggiori.
+
+Le variabili **Access.to.Basic.Knowledg**e e **Access.to.Information.and.Communications** mostrano una distribuzione più eterogenea, con valori distribuiti su un intervallo più ampio, indicando forti differenze tra i Paesi nell’accesso all’istruzione e all’informazione.
+
+Infine, **Personal.Safety** presenta una distribuzione più compatta rispetto alle altre variabili, suggerendo una minore variabilità tra i Paesi, anche se non mancano alcuni valori estremi che indicano situazioni di particolare insicurezza.
+
+Nel complesso, l’analisi degli istogrammi evidenzia una marcata eterogeneità tra i Paesi e conferma che, accanto a una maggioranza con livelli medio-alti di progresso sociale, esistono alcuni casi estremi che influenzano la forma delle distribuzioni.
+
+## Istogramma e densità del Social Progress Score
+
+```{r message=FALSE, warning=FALSE}
+ggplot(data, aes(x = Social.Progress.Score)) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    fill = "#2171B5",
+    color = "white",
+    bins = 30
+  ) +
+  geom_density(
+    color = "#08306B",
+    size = 1
+  ) +
+  labs(
+    title = "Distribuzione e Densità del Social Progress Score",
+    x = "Social Progress Score",
+    y = "Densità"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10))
+)
+```
+
+L’istogramma con la curva di densità del **Social Progress Score** mostra che la maggior parte dei Paesi si concentra su valori medio-alti dell’indice, in particolare tra circa 60 e 80 punti. La distribuzione non risulta perfettamente simmetrica e presenta una leggera asimmetria verso sinistra, con una coda più estesa per i valori più bassi del punteggio.
+
+Questo andamento indica che, sebbene molti Paesi presentino livelli di progresso sociale relativamente elevati, esiste una quota ridotta di Paesi con valori sensibilmente più bassi che contribuisce ad abbassare la media complessiva. La densità diminuisce infatti progressivamente al diminuire del punteggio, suggerendo la presenza di pochi casi estremi con condizioni di progresso sociale particolarmente svantaggiate.
+
+Nel complesso, la distribuzione evidenzia una forte concentrazione dei valori nella fascia centrale-alta e conferma quanto osservato nell’analisi descrittiva, ovvero una maggiore presenza di Paesi con livelli medio-alti di progresso sociale rispetto a quelli con valori molto bassi.
+
+## Boxplot 
+
+```{r}
+par(mfrow = c(2,5))
+par(cex = 0.6)
+
+for (i in 1:10) {
+  boxplot(data_num[[i]],
+          main = colnames(data_num)[i])
+}
+
+
+```
+I boxplot consentono di analizzare in modo sintetico la posizione centrale, la dispersione e la presenza di possibili outlier per ciascuna variabile del **Social Progress Index**. Nel complesso emerge una marcata eterogeneità tra i Paesi, con indicatori che mostrano livelli di variabilità molto diversi tra loro.
+
+Nel dettaglio, il **Social.Progress.Score** presenta una mediana collocata nella fascia medio-alta della distribuzione e una dispersione moderata. La presenza di una coda leggermente più lunga verso i valori più bassi indica che, accanto a una maggioranza di Paesi con buoni livelli di progresso sociale, esistono alcuni casi particolarmente svantaggiati.
+
+Le tre dimensioni principali dell’indice, **Basic.Human.Needs**, **Foundations.of.Wellbeing** e **Opportunity**, mostrano comportamenti differenti.
+**Basic.Human.Needs** e **Foundations.of.Wellbeing** presentano una distribuzione relativamente compatta, con mediane elevate e una variabilità contenuta, segno che molti Paesi garantiscono livelli simili per questi aspetti, al contrario, **Opportunity** evidenzia una dispersione più ampia e la presenza di valori più distanti dalla mediana, indicando forti differenze tra i Paesi in termini di diritti, libertà e opportunità individuali.
+
+Analizzando le componenti dei bisogni fondamentali, **Nutrition.and.Basic.Medical.Care**, **Water.and.Sanitation** e **Shelter** mostrano mediane elevate e una distribuzione concentrata nella parte alta della scala. Tuttavia, la presenza di outlier inferiori segnala alcuni Paesi con condizioni molto peggiori rispetto alla maggioranza, soprattutto per quanto riguarda l’accesso all’acqua e ai servizi igienico-sanitari.
+
+La variabile **Personal.Safety** presenta una dispersione più contenuta rispetto ad altri indicatori, suggerendo valori relativamente simili tra molti Paesi, anche se non mancano alcuni casi estremi che indicano situazioni di particolare insicurezza.
+
+Infine,**Access.to.Basic.Knowledge**e**Access.to.Information.and.Communications** mostrano una variabilità più marcata e un intervallo più ampio dei valori. Questo evidenzia forti disuguaglianze tra i Paesi nell’accesso all’istruzione di base e alle tecnologie dell’informazione, con alcuni casi molto avanzati e altri nettamente arretrati.
+
+Nel complesso, l’analisi dei boxplot conferma quanto emerso nelle analisi precedenti: accanto a una maggioranza di Paesi con livelli medio-alti di progresso sociale, permangono differenze significative e alcuni casi estremi che contribuiscono ad aumentare la dispersione delle variabili.
+
+## Outlier
+
+Calcoliamo gli outlier per capire dove ci sono valori estremi, per descrivere meglio la distribuzione delle variabili e per non farci ingannare dai valori anomali.
+
+```{r}
+outliers <- sapply(data_num, function(x) {
+  Q1  <- quantile(x, 0.25, na.rm = TRUE)
+  Q3  <- quantile(x, 0.75, na.rm = TRUE)
+  IQRv <- Q3 - Q1
+  lower <- Q1 - 1.5 * IQRv
+  upper <- Q3 + 1.5 * IQRv
+  sum(x < lower | x > upper, na.rm = TRUE)
+})
+
+outliers
+
+```
+
+L’analisi degli outlier basata sul criterio dell’IQR mostra che, nel complesso, il dataset del **Social Progress Index** presenta un numero molto limitato di valori estremi. La maggior parte delle variabili non evidenzia alcun outlier, suggerendo distribuzioni piuttosto stabili e omogenee tra i Paesi.
+
+In particolare, il **Social.Progress.Score**, **Foundations.of.Wellbeing** e **Opportunity** non presentano outlier, indicando che i livelli complessivi di progresso sociale e delle sue principali dimensioni non sono influenzati da valori estremamente distanti dalla distribuzione centrale.
+
+Alcune componenti mostrano invece la presenza di pochi outlier. 
+**Basic.Human.Needs**, **Nutrition.and.Basic.Medical.Care**, **Shelter**, **Access.to.Information.and.Communications** ed **Environmental.Quality** presentano un solo outlier ciascuna, mentre **Water.and.Sanitation** è la variabile con il numero maggiore di valori estremi, pari a due. Questi outlier rappresentano Paesi con condizioni particolarmente critiche rispetto alla maggioranza, soprattutto per quanto riguarda l’accesso ai servizi essenziali.
+
+Nel complesso, la bassa incidenza di outlier conferma quanto osservato nei boxplot: pur esistendo alcuni casi estremi, essi non alterano in modo significativo la distribuzione generale delle variabili e riflettono situazioni specifiche di forte svantaggio piuttosto che anomalie diffuse nel dataset.
+
+## Q-Q Plot
+
+Il Q–Q plot (Quantile-Quantile plot) permette di confrontare i quantili teorici di una distribuzione normale con i quantili osservati dei dati.
+In pratica, ci mostra se i dati si distribuiscono in modo simile a una normale: se i punti seguono la linea, la distribuzione è vicina alla normale; se si discostano, ci sono asimmetrie, code lunghe o valori estremi.
+
+Andiamo a creare i Q–Q plot per alcune delle principali variabili del **Social Progress Index**.
+
+```{r}
+par(mfrow = c(2,3))
+par(cex=0.6)
+
+vars <- c("Social.Progress.Score",
+          "Basic.Human.Needs",
+          "Foundations.of.Wellbeing",
+          "Opportunity",
+          "Nutrition.and.Basic.Medical.Care",
+          "Water.and.Sanitation")
+
+for (v in vars) {
+  qqnorm(data[[v]], main = paste("Q-Q Plot per", v))
+  qqline(data[[v]], col="#08306B")
+}
+par(mfrow = c(1,1))  
+
+```
+
+I Q–Q plot delle principali variabili del **Social Progress Index** mostrano come i dati si discostino in alcuni casi dalla distribuzione normale.
+
+Le variabili **Social.Progress.Score**, **Opportunity** e **Water.and.Sanitation** presentano piccoli scostamenti dalla linea blu, soprattutto nella parte inferiore della distribuzione. Questo indica la presenza di alcuni Paesi con valori particolarmente bassi, che contribuiscono ad allungare la coda sinistra.
+
+Al contrario, **Basic.Human.Needs**, **Foundations.of.Wellbeing** e **Nutrition.and.Basic.Medical.Care** seguono più da vicino la linea teorica, mostrando una distribuzione più simmetrica e vicino alla normale.
+
+In generale, i grafici confermano quanto osservato nei boxplot e negli outlier: alcune variabili presentano valori estremi o code leggermente asimmetriche, mentre altre sono più compatte e distribuite in modo regolare.
+
+\newpage
+# Analisi Bivariata 
+
+L'analisi bivariata permette di vedere quali variabili numeriche sono collegate tra loro.
+
+## Violin Plot 
+```{r}
+
+df_long <- data %>%
+  pivot_longer(
+    cols = where(is.numeric),
+    names_to = "variabile",
+    values_to = "valore"
+  )
+
+
+ggplot(df_long, aes(x = variabile, y = valore)) +
+  geom_violin(trim = FALSE, fill = "#BDD7E7", color = "gray30") +
+  geom_boxplot(width = 0.1, fill = "white", outlier.size = 0.6) +
+  theme_minimal() +
+  labs(x = NULL, y = NULL) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+I violin plot mostrano la distribuzione completa di ciascuna variabile numerica. Alcune variabili come **Nutrition.and.Basic.Medical.Care** o **Opportunity** hanno distribuzioni concentrate, mentre altre come **Water.and.Sanitation** e **Shelter** mostrano maggiore variabilità e pochi valori estremi (outlier), confermando differenze tra i paesi.
+
+## Scatter plot 
+
+```{r}
+
+plot(data_num$Social.Progress.Score, data_num$Opportunity,
+     xlab = "Social Progress Score", ylab = "Opportunity",
+     main = "Social Progress Score vs Opportunity",
+     col = "#6BAED6", pch = 19)
+
+```
+
+```{r}
+
+plot(data_num$Nutrition.and.Basic.Medical.Care, data_num$Water.and.Sanitation,
+     xlab = "Nutrition and Basic Medical Care", ylab = "Water and Sanitation",
+     main = "Nutrition vs Water and Sanitation",
+     col = "#6BAED6", pch = 19)
+```
+
+I grafici a dispersione evidenziano relazioni positive tra alcune variabili, ad esempio tra **Social.Progress.Score** e **Opportunity** e tra **Nutrition.and.Basic.Medical.Care** e **Water.and.Sanitation**.
+
+## Hexbin plot 
+
+```{r}
+ggplot(data, aes(x = Social.Progress.Score, y = Foundations.of.Wellbeing)) +
+  geom_hex(bins = 25) +
+  scale_fill_viridis_c(option = "C") +
+  labs(title = "Hexbin Plot: Social Progress Score vs Foundations of Wellbeing",
+       x = "Social Progress Score", y = "Foundations of Wellbeing",
+       fill = "Densità") +
+  theme_minimal()
+```
+
+L’hexbin plot tra **Social Progress Score** e **Foundations of Wellbeing** mostra in modo evidente una relazione positiva tra le due variabili. I paesi con livelli più elevati di benessere di base tendono ad avere anche punteggi più alti di progresso sociale complessivo, mentre quelli con valori bassi di **wellbeing** si concentrano nelle aree inferiori del grafico.
+
+La distribuzione dei dati evidenzia una forte concentrazione di osservazioni lungo una direzione crescente, suggerendo che il miglioramento delle condizioni legate al benessere fondamentale – come salute, istruzione di base, accesso all’informazione e qualità ambientale – è strettamente associato a un aumento del progresso sociale generale. In altre parole, il benessere non appare come un elemento isolato, ma come una base essenziale su cui si sviluppano le altre dimensioni del progresso sociale.
+
+La presenza di pochi paesi con valori estremi indica che, sebbene esistano differenze significative tra i contesti nazionali, il legame tra **wellbeing** e **Social Progress** rimane coerente per la maggior parte delle osservazioni. Questo risultato è in linea con quanto emerge anche dagli scatter plot precedenti, dove si osservano relazioni positive tra diverse componenti del progresso sociale. Nel complesso, l’analisi grafica suggerisce che investire nel benessere di base rappresenta un fattore chiave per favorire livelli più elevati di progresso sociale.
+
+## Matrice di correlazione 
+
+```{r}
+
+corr <- cor(data_num, use = "pairwise.complete.obs")
+corr_filt <- corr
+corr_filt[abs(corr_filt) < 0.65] <- NA 
+
+ord <- corrMatOrder(corr, order = "hclust") 
+
+corrplot(
+  corr_filt[ord, ord],
+  type = "upper",
+  method = "color",
+  col = colorRampPalette(c("#B2182B", "white", "#2171B5"))(200),
+  tl.col = "black",
+  tl.cex = 0.55,
+  tl.srt = 45,
+  addCoef.col = "black",   
+  number.cex = 0.45,      
+  number.digits = 2,       
+  diag = FALSE,
+  na.label = " "
+)
+
+
+                  
+```
+
+Per studiare la relazione tra le variabili numeriche è stata calcolata una matrice di correlazione. La correlazione indica quanto due variabili sono associate tra loro e può assumere valori compresi tra -1 e +1.
+
+Il calcolo è stato effettuato utilizzando le osservazioni disponibili per ogni coppia di variabili, ignorando i valori mancanti, così da evitare una riduzione eccessiva del numero di osservazioni.
+
+Per rendere il grafico più leggibile, sono state mostrate solo le correlazioni con valore assoluto maggiore o uguale a 0.65, considerate forti; le altre correlazioni non vengono visualizzate. Le variabili sono state inoltre ordinate tramite clustering gerarchico, al fine di raggruppare quelle che presentano relazioni simili e facilitare l’interpretazione del grafico.
+
+Le correlazioni positive indicano che all’aumentare di una variabile aumenta anche l’altra, mentre le correlazioni negative indicano una relazione inversa; l’intensità del colore riflette la forza dell’associazione. L’analisi si concentra quindi sulle relazioni più rilevanti tra le variabili, evitando di sovraccaricare il grafico con associazioni deboli e di difficile interpretazione. Si sottolinea infine che la correlazione misura un’associazione lineare e non implica un rapporto di causalità.
+
+Dall’osservazione della matrice emergono diverse correlazioni positive elevate tra le dimensioni analizzate. In particolare, le variabili legate all’istruzione e all’accesso alle informazioni (**Access to Basic Knowledge**, **Access to Advanced Education** e **Access to Information and Communications**) risultano fortemente correlate tra loro, suggerendo che questi aspetti tendono a svilupparsi congiuntamente.
+
+Si osservano inoltre associazioni rilevanti tra le dimensioni del benessere e della qualità della vita, come **Health and Wellness**, **Personal Safety ed Environmental Quality**, indicando che contesti con migliori condizioni sanitarie tendono anche a essere più sicuri e caratterizzati da una migliore qualità ambientale.
+
+Infine, le variabili **Opportunity**, **Personal Rights** e **Personal Freedom and Choice** mostrano forti correlazioni reciproche, evidenziando come le opportunità individuali siano strettamente legate alla tutela dei diritti e delle libertà personali. Nel complesso, la presenza di gruppi di variabili fortemente correlate conferma la natura multidimensionale del progresso sociale, in cui le diverse componenti risultano interconnesse e si rafforzano reciprocamente.
+
+## Pairs panels
+
+```{r}
+pairs.panels(data_num,
+             col = "#2171B5",        
+             bg = "#6BAED6",         
+             pch = 21,            
+             density = TRUE,       
+             ellipses = FALSE,    
+             lm = TRUE)           
+
+```
+
+Il pairs panel consente di analizzare in modo sintetico le relazioni tra tutte le variabili considerate.
+In particolare, lungo la diagonale sono riportate le distribuzioni marginali di ciascuna variabile, mentre nelle celle fuori diagonale sono rappresentate le relazioni bivariate tramite scatterplot e coefficienti di correlazione.
+
+Questa rappresentazione permette di:
+
+- individuare eventuali relazioni lineari o non lineari tra le variabili;
+
+- valutare la forza e il segno della correlazione;
+
+- osservare possibili pattern, outlier o comportamenti anomali;
+
+- confrontare rapidamente le distribuzioni delle variabili analizzate.
+
+Nel complesso, il pairs panel fornisce una visione d’insieme dei dati e riassume in maniera efficace le analisi esplorative svolte fino a questo punto, confermando le principali relazioni emerse nelle fasi precedenti del lavoro.
+
+\newpage
+# Analisi delle componenti principali: PCA
+
+## PCA
+
+La PCA (Principal Component Analysis) è una tecnica di riduzione della dimensionalità che trasforma un insieme di variabili originali potenzialmente correlate in un nuovo insieme di variabili non correlate, dette componenti principali (PC). 
+
+Le componenti sono ordinate in modo tale che la prima spieghi la quota maggiore di variabilità totale, e le successive spieghino quote decrescenti.
+
+Nel contesto del **Social Progress Index 2022**, l’obiettivo della PCA è:
+
+1. sintetizzare l’informazione contenuta nei diversi indicatori in pochi fattori latenti;
+
+2. ridurre la ridondanza informativa dovuta alle forti correlazioni;
+
+3. facilitare le analisi successive (clustering e regressione), riducendo problemi di multicollinearità e migliorando l’interpretabilità.
+
+La PCA viene effettuata solo sulle variabili numeriche e con standardizzazione (scale), perché gli indicatori hanno dispersioni diverse.
+
+```{r}
+pca_spi <- prcomp(data_num, center = TRUE, scale. = TRUE)
+
+summary(pca_spi)
+
+```
+
+Il comando `summary()` restituisce la deviazione standard delle componenti, la varianza spiegata da ciascuna PC, la varianza cumulata.
+
+## Varianza spiegata e Scree Plot
+
+Calcoliamo gli autovalori (varianza di ciascuna componente) e la percentuale di varianza spiegata:
+
+```{r}
+eigenvalues <- pca_spi$sdev^2
+var_percent <- round(eigenvalues / sum(eigenvalues) * 100, 3)
+
+
+
+cumsum(var_percent)
+
+```
+
+Procediamo con la visualizzazione grafica:
+
+```{r warning=FALSE}
+fviz_eig(pca_spi, addlabels = TRUE, ylim = c(0, 100))
+
+```
+
+## Scelta del numero di componenti
+
+Una fase cruciale dell’Analisi delle Componenti Principali (PCA) è la determinazione del numero di componenti da mantenere.
+A tale scopo esistono diversi criteri empirici, comunemente utilizzati in letteratura, che consentono di bilanciare la riduzione della dimensionalità con la quantità di informazione preservata.
+
+I principali criteri sono i seguenti:
+
+-Soglia di varianza cumulata: si seleziona il numero minimo di componenti principali tale che la varianza cumulata spiegata sia almeno pari a una soglia prefissata (ad esempio l’80%).
+
+Criterio del gomito (scree plot): si analizza il grafico degli autovalori in funzione dell’indice della componente e si individua il punto a partire dal quale l’incremento di varianza spiegata diventa marginale.
+
+Regola di Kaiser: si mantengono solo le componenti principali associate a un autovalore maggiore o uguale a 1, in quanto spiegano una quantità di varianza non inferiore a quella di una variabile standardizzata.
+
+Nel presente lavoro si procede utilizzando la regola di Kaiser per la selezione del numero di componenti principali.
+
+In base a tale criterio, vengono mantenute esclusivamente le componenti il cui autovalore risulta maggiore o uguale a 1. 
+
+L’implementazione in ambiente R è la seguente:
+
+```{r}
+eigenvalues[eigenvalues >= 1]
+length(eigenvalues[eigenvalues >= 1])
+
+```
+
+I risultati mostrano che solo le prime due componenti principali soddisfano tale criterio, con autovalori pari rispettivamente a 12.49 e 1.77. Tutte le componenti successive presentano autovalori inferiori a 1 e spiegano quindi una quota di varianza inferiore a quella di una singola variabile standardizzata.
+
+Sulla base di questo criterio, si conferma la scelta di mantenere le prime due componenti principali, che sintetizzano in modo efficace l’informazione contenuta nel dataset.
+
+## Relazioni tra variabili originali e componenti (loadings)
+
+I loadings indicano quanto ogni variabile contribuisce a ciascuna PC:
+
+```{r}
+round(pca_spi$rotation[, 1:3], 2)
+
+```
+
+La prima componente principale presenta carichi elevati e omogenei su tutte le dimensioni e componenti del **Social Progress Index**, inclusi i bisogni fondamentali, il benessere, le opportunità e l’indice complessivo. Essa può quindi essere interpretata come un fattore generale di progresso sociale, che sintetizza il livello complessivo di sviluppo sociale dei Paesi.
+
+La seconda componente principale mostra invece una struttura contrastiva: carichi positivi elevati per variabili legate a diritti personali, inclusione sociale e qualità ambientale, e carichi negativi per variabili relative ai bisogni materiali di base, quali nutrizione, accesso all’acqua e alloggio. Questa componente cattura quindi una diversa configurazione del progresso sociale, distinguendo modelli orientati ai diritti e alla sostenibilità da modelli focalizzati principalmente sui bisogni essenziali.
+
+La terza componente principale, pur mostrando alcune associazioni rilevanti, non viene considerata nell’analisi successiva in quanto non soddisfa il criterio di selezione basato sugli autovalori.
+
+## PCA Biplot 
+
+Il biplot mostrerà contemporaneamente i paesi e le variabili. 
+
+Si useranno i nomi dei paesi come etichette.
+
+```{r}
+
+rownames(data_num) <- data$Country
+
+```
+
+Poi il grafico
+
+```{r}
+fviz_pca_biplot(pca_spi, repel = TRUE)
+
+```
+
+Il biplot della PCA rappresenta simultaneamente le variabili e i Paesi nello spazio definito dalle prime due componenti principali, che spiegano complessivamente circa l’89% della varianza totale.
+
+L’asse orizzontale (PC1) cattura il livello generale di progresso sociale: le variabili risultano fortemente allineate lungo questa dimensione, confermando l’esistenza di un fattore latente comune che sintetizza bisogni fondamentali, benessere e opportunità. I Paesi posizionati nella parte destra del grafico presentano valori elevati su tali dimensioni, mentre quelli collocati a sinistra mostrano livelli più bassi di progresso sociale.
+
+L’asse verticale (PC2) evidenzia invece una contrapposizione tra variabili legate ai diritti personali, all’inclusione sociale e alla qualità ambientale, e variabili relative ai bisogni materiali di base, come nutrizione, accesso all’acqua e alloggio. Questa dimensione distingue quindi differenti configurazioni qualitative del progresso sociale, piuttosto che il suo livello complessivo.
+
+Nel complesso, il biplot conferma l’elevata correlazione tra gli indicatori del **Social Progress Index** e la capacità della PCA di sintetizzare efficacemente l’informazione contenuta nel dataset.
+
+## Contributo delle variabili (cos2)
+
+```{r}
+fviz_pca_var(pca_spi,
+             axes = c(1, 2),
+             col.var = "cos2",
+             repel = TRUE) +
+  labs(title = "Contributo e rappresentazione delle variabili (cos2) sulle prime due PC")
+
+```
+
+Il grafico del contributo e della qualità di rappresentazione delle variabili (cos²) nel piano definito dalle prime due componenti principali consente di valutare quanto ciascun indicatore del **Social Progress Index** sia adeguatamente spiegato da tale spazio ridotto.
+
+La maggior parte delle variabili presenta valori elevati di cos² e risulta fortemente allineata lungo la prima componente principale, confermando che PC1 cattura la quota predominante di informazione ed è interpretabile come un fattore generale di progresso sociale.
+
+La seconda componente principale introduce invece una distinzione tra variabili legate ai diritti personali, all’inclusione sociale e alla qualità ambientale, che si collocano nella parte superiore del piano, e variabili associate ai bisogni materiali di base, come nutrizione, accesso all’acqua e alloggio, che si collocano nella parte inferiore.
+
+Nel complesso, il grafico conferma che le prime due componenti principali forniscono una rappresentazione efficace e interpretabile delle variabili originali, giustificando il loro utilizzo nelle successive analisi di clustering.
+
+## Distribuzione dei paesi nello spazio delle PC 
+
+```{r}
+fviz_pca_ind(pca_spi,
+             axes = c(1, 2),
+             col.ind = "cos2",
+             repel = TRUE) +
+  labs(title = "Distribuzione dei paesi nel piano delle prime due componenti (cos2)")
+
+```
+
+Il grafico di distribuzione degli individui mostra la proiezione dei Paesi nel piano definito dalle prime due componenti principali, che spiegano complessivamente circa l’89% della varianza totale.
+
+La dispersione degli individui è prevalentemente orizzontale, a conferma del ruolo dominante della prima componente principale, interpretabile come un asse di progresso sociale complessivo. I Paesi collocati nella parte destra del grafico presentano livelli più elevati di sviluppo sociale, mentre quelli posizionati a sinistra evidenziano condizioni più svantaggiate.
+
+La seconda componente principale introduce una differenziazione più contenuta ma informativa, legata alla struttura qualitativa del progresso sociale, distinguendo Paesi con una maggiore attenzione ai diritti, all’inclusione sociale e alla qualità ambientale da Paesi maggiormente focalizzati sui bisogni materiali di base.
+
+Il colore degli individui, basato sul cos², indica la qualità della rappresentazione nel piano PC1–PC2: i Paesi più distanti dall’origine risultano meglio spiegati dalle due componenti, mentre quelli più centrali presentano una rappresentazione meno accurata.
+
+\newpage
+# Analisi Cluster 
+
+## Obiettivi 
+
+L’analisi di clustering è una tecnica statistica multivariata di apprendimento non supervisionato che consente di raggruppare le osservazioni in insiemi omogenei, detti cluster, sulla base della loro similarità.
+Nel contesto del **Social Progress Index 2022**, il clustering permette di individuare gruppi di Paesi caratterizzati da profili simili di progresso sociale, riducendo la complessità del dataset e facilitando l’interpretazione delle differenze strutturali tra le diverse aree del mondo.
+
+In particolare, questa analisi consente di:
+
+- sintetizzare l’eterogeneità dei Paesi in un numero limitato di gruppi;
+
+- evidenziare eventuali pattern comuni tra Paesi con livelli simili di progresso sociale;
+
+- supportare le interpretazioni emerse dall’analisi esplorativa e dalla PCA.
+
+Si distinguono due principali approcci:
+
+1) clustering gerarchico, che costruisce una struttura ad albero (dendrogramma) senza fissare a priori il numero di cluster;
+
+2) clustering non gerarchico, come il metodo k-means, che richiede invece di specificare il numero di gruppi desiderato.
+
+Nel presente lavoro vengono applicati entrambi gli approcci al fine di valutare la stabilità e la robustezza dei risultati.
+
+## Preparazione dei dati 
+
+Il clustering viene applicato alle variabili numeriche del dataset.
+Poiché queste variabili sono misurate su scale diverse, è necessario standardizzarle in modo che abbiano tutte la stessa importanza nel calcolo delle distanze.
+
+```{r}
+
+data_scal <- scale(data_num)
+
+```
+
+Dopo la standardizzazione, tutte le variabili hanno media pari a zero e deviazione standard pari a uno.
+Questo passaggio è fondamentale per evitare che alcune variabili, solo perché più variabili, influenzino in modo eccessivo la formazione dei cluster.
+
+## Scelta della distanza e metodo di clustering
+
+Per misurare quanto due Paesi siano simili tra loro viene utilizzata la distanza euclidea, che è particolarmente adatta quando le variabili sono quantitative e standardizzate.
+
+
+```{r}
+
+d <- dist(data_scal, method = "euclidean")
+
+```
+
+Successivamente si applica un clustering gerarchico agglomerativo tramite la funzione `hclust()`.
+Come metodo di aggregazione si sceglie Ward.D2, che tende a creare cluster compatti e omogenei minimizzando la variabilità interna a ciascun gruppo.
+
+```{r}
+hc <- hclust(d, method = "ward.D2")
+
+```
+
+## Clustering Gerarchico Agglomerativo
+### Dendrogramma
+
+```{r}
+plot(hc,
+     main = "Dendrogramma – Metodo WardD2",
+     xlab = "Osservazioni",
+     ylab = "Distanza",
+     labels = FALSE,
+     hang = -1,
+     col = "black")
+
+```
+
+Il dendrogramma rappresenta graficamente il risultato del clustering gerarchico.
+Ogni Paese parte inizialmente come un cluster singolo e, a ogni passo, i Paesi o i gruppi più simili vengono uniti tra loro.
+
+La lunghezza dei rami indica la distanza alla quale avviene la fusione: più in alto avviene l’unione, più i gruppi erano diversi tra loro.
+Nel nostro caso, l’ultima fusione rappresenta l’unione tra Paesi con livelli di progresso sociale molto elevati e Paesi con condizioni sociali più fragili.
+
+Osservando il dendrogramma, si può ipotizzare la presenza di 2 o 3 cluster. Tuttavia, la separazione più netta sembra suggerire una soluzione con due gruppi principali.
+
+## Scelta del numero ottimale di cluster
+
+### Metodo del gomito (WSS)
+
+```{r}
+grf_wss <- fviz_nbclust(data_scal, FUN = hcut, method = "wss")
+grf_wss +
+  labs(
+    title = "Metodo del gomito (WSS)",
+    x = "Numero di cluster (k)",
+    y = "Somma delle distanze intra-cluster (WSS)"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  scale_color_manual(values = "blue") +
+  scale_fill_manual(values = "blue")
+
+```
+
+Il metodo del gomito mostra come la somma delle distanze all’interno dei cluster diminuisce all’aumentare di k.
+Dal grafico si nota un forte miglioramento passando da k = 1 a k = 2, mentre dal passaggio a k = 3 in poi la curva tende ad appiattirsi.
+Questo suggerisce che il punto di “gomito” si trovi intorno a k = 2.
+
+## Metodo della silhouette
+
+```{r}
+grf <- fviz_nbclust(data_scal, FUN = hcut, method = "silhouette")
+grf +
+  labs(
+    title = "Metodo della Silhouette",
+    x = "Numero di cluster (k)",
+    y = "Ampiezza silhouette"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) +
+  scale_color_manual(values = "blue") +
+  scale_fill_manual(values = "blue")
+
+```
+
+L’indice di silhouette misura quanto i cluster sono compatti internamente e ben separati tra loro.
+Dal grafico si osserva che l’ampiezza media della silhouette è massima per k = 2 e diminuisce in modo evidente per k = 3.
+
+Sulla base di entrambi i criteri, il numero ottimale di cluster viene fissato pari a k = 2.
+
+\newpage
+# Interpretazione preliminare dei cluster
+
+```{r}
+cluster <- cutree(hc, k = 2)
+table(cluster)
+```
+
+
+```{r}
+round((table(cluster) / nrow(data_scal)) * 100, 2)
+
+```
+
+Il primo cluster contiene una percentuale leggermente maggiore di Paesi rispetto al secondo.
+
+```{r}
+
+fviz_cluster(list(data = data_scal, cluster = cluster))
+
+```
+
+Il grafico mostra la distribuzione dei Paesi nello spazio bidimensionale, colorati in base al cluster di appartenenza.
+I due gruppi risultano ben separati soprattutto lungo la prima dimensione, che rappresenta il livello complessivo di progresso sociale.
+
+Il cluster 1 comprende Paesi con valori più elevati di progresso sociale, caratterizzati da migliori condizioni in termini di bisogni fondamentali, benessere e opportunità.
+Il cluster 2 raccoglie invece Paesi con valori più bassi, mostrando anche una maggiore dispersione interna, segno di una maggiore eterogeneità tra le condizioni sociali.
+
+## Confronto con una soluzione a tre cluster
+
+```{r}
+cluster3 <- cutree(hc, k = 3)
+fviz_cluster(list(data = data_scal, cluster = cluster3))
+
+
+```
+
+La soluzione con k = 3 risulta meno chiara: i cluster appaiono più sovrapposti e uno dei gruppi occupa una posizione intermedia senza una separazione netta.
+Per questo motivo, la soluzione con k = 2 risulta più interpretabile e viene confermata come scelta finale.
+
+## Analisi sui centroidi
+
+I centroidi rappresentano il valore medio delle variabili standardizzate all’interno di ciascun cluster e permettono di descrivere in modo sintetico le caratteristiche dei gruppi.
+
+```{r}
+centroids <- aggregate(data_scal,
+                       by = list(Cluster = cluster),
+                       FUN = mean)
+
+print(centroids)
+
+
+```
+
+Dall’analisi dei centroidi emerge che:
+
+il cluster 1 presenta valori medi positivi per la maggior parte degli indicatori del **Social Progress Index**, indicando Paesi con livelli elevati di progresso sociale;
+
+il cluster 2 presenta valori medi negativi, associati a condizioni sociali più fragili e a minori opportunità.
+
+Questo risultato è coerente con quanto osservato nei grafici precedenti.
+
+## Clustering non gerarchico (k-means)
+
+Per verificare la robustezza dei risultati ottenuti con il clustering gerarchico, viene applicato anche il metodo k-means fissando il numero di cluster a k = 2.
+
+```{r}
+set.seed(123)
+kmeans_fit <- kmeans(data_scal, centers = 2)
+
+```
+
+Fissato il numero di cluster andiamo a vedere il profilo medio tipico di ciascun cluster: 
+
+```{r}
+kmeans_fit$centers
+
+```
+
+Poiché i dati sono standardizzati, valori inferiori a zero indicano performance al di sotto della media globale, mentre valori positivi indicano performance superiori alla media.
+
+Il cluster 1 presenta un valore medio del **Social Progress Score** pari a -1.04 e valori negativi per tutti i pilastri del progresso sociale, evidenziando Paesi caratterizzati da uno svantaggio multidimensionale persistente.
+
+Il cluster 2, al contrario, mostra valori medi positivi e relativamente omogenei su tutte le dimensioni considerate, rappresentando un profilo di elevato e bilanciato progresso sociale, in cui il soddisfacimento dei bisogni di base si accompagna a solide opportunità individuali e istituzionali.
+
+
+Per valutare il grado di concordanza tra le partizioni ottenute con il metodo k-means e il clustering gerarchico è stato utilizzato l’Adjusted Rand Index (ARI).
+
+```{r}
+
+adjustedRandIndex(kmeans_fit$cluster, cluster)
+
+
+```
+
+Il valore ottenuto (ARI =  0.858341) indica una concordanza moderata tra i due metodi di clustering, suggerendo che, pur in presenza di alcune differenze nelle assegnazioni, la struttura complessiva dei gruppi individuati risulta coerente.
+
+Le discrepanze osservate possono essere attribuite principalmente a Paesi collocati in prossimità dei confini tra i cluster, la cui classificazione risulta più sensibile al metodo utilizzato.
+
+L’analisi dei centroidi mostra tuttavia profili molto simili tra i due approcci, confermando l’individuazione di due gruppi ben distinti caratterizzati da livelli di progresso sociale nettamente differenti.
+
+```{r}
+fviz_cluster(kmeans_fit, data = data_scal)
+
+```
+
+Il grafico mostra una separazione ancora più netta tra i due cluster, a conferma della bontà della partizione scelta.
+
+## Conclusioni
+
+L’analisi di clustering applicata al Social Progress Index 2022 evidenzia una chiara suddivisione dei Paesi in due gruppi principali.
+Il primo cluster raccoglie Paesi con livelli più elevati di progresso sociale, mentre il secondo comprende Paesi caratterizzati da condizioni sociali più fragili e da una maggiore eterogeneità interna.
+
+La coerenza dei risultati ottenuti con due approcci diversi, clustering gerarchico e k-means, conferma la presenza di una struttura ben definita nei dati.
+Nel complesso, il clustering rafforza l’interpretazione di un forte divario globale nei livelli di progresso sociale emerso nelle analisi precedenti.
+
+\newpage
+# Modello di Regressione Lineare Semplice
+
+L’ultima sezione del report è dedicata alla costruzione di modelli di regressione lineare, finalizzati ad analizzare la relazione tra il punteggio complessivo del **Social Progress Index 2022** e alcune sue dimensioni fondamentali.
+
+Il modello di regressione lineare semplice mette in relazione la variabile risposta con una singola variabile esplicativa, assumendo una struttura lineare con termine di errore.
+
+Tale formulazione consente di valutare l’intensità e la direzione dell’associazione lineare tra le variabili considerate.
+
+## Scelta delle variabili
+
+Il **Social Progress Score** viene assunto come variabile risposta, in quanto misura sintetica del livello complessivo di progresso sociale espresso dall’indice **SPI**.
+
+La selezione delle variabili esplicative è stata effettuata attraverso l’analisi delle correlazioni tra il punteggio complessivo e le restanti variabili quantitative presenti nel dataset, al fine di individuare le dimensioni maggiormente associate all’indice.
+
+```{r}
+corr <- cor(data_num, use = "pairwise.complete.obs")
+sort(abs(corr["Social.Progress.Score", ]), decreasing = TRUE)
+
+```
+
+Tra le variabili che mostrano una maggiore associazione con il **Social Progress Score** viene scelta **Personal.Rights**, in quanto esprime una componente chiave del progresso sociale e presenta una chiara interpretabilità sul piano teorico.
+
+
+
+## Stima del modello semplice
+
+```{r}
+set.seed(104)
+
+fit1 <- lm(Social.Progress.Score~Personal.Rights, data=data) 
+summary(fit1)
+
+```
+
+Dai risultati del modello di regressione lineare semplice emerge che il coefficiente associato alla variabile **Personal.Rights** è statisticamente significativo (p-value < 0.001). Pertanto, si rifiuta l’ipotesi nulla secondo cui il coefficiente associato a **Personal.Rights** è pari a zero, evidenziando l’esistenza di una relazione lineare significativa tra Personal.Rights e il Social Progress Score.
+
+L’intercetta del modello risulta pari a circa 34.06 e rappresenta il valore atteso del **Social Progress Score** nel caso in cui la variabile **Personal.Rights** assuma valore pari a zero.
+Il coefficiente stimato per **Personal.Rights** è pari a 0.467: ciò indica che, a parità delle altre condizioni, un incremento unitario di **Personal.Rights** è associato in media a un aumento di circa 0.47 punti nel **Social Progress Score**.
+
+Il test F globale del modello restituisce un valore altamente significativo (p-value < 0.001), portando al rifiuto dell’ipotesi nulla secondo cui il modello includa esclusivamente l’intercetta. Questo risultato conferma la rilevanza complessiva del modello stimato.
+
+Il valore di R2 è pari a 0.5035 mentre quello di R2adjusted è 0.5005, tali valori indicano che circa il 50% della variabilità del **Social Progress Score** è spiegata dalla variabile **Personal.Rights**, risultato soddisfacente considerando la semplicità del modello.
+
+
+## Intervalli di confidenza 
+
+```{r}
+
+confint(fit1)
+
+```
+
+Gli intervalli di confidenza al livello del 95% stimati per i parametri del modello risultano pari a [28.85, 39.26]  per l’intercetta e a [0.396, 0.539] per il coefficiente associato alla variabile **Personal.Rights**.
+
+Poiché l’intervallo di confidenza relativo al coefficiente di **Personal.Rights** non include il valore zero, l’effetto di tale variabile sul **Social Progress Score** può essere considerato statisticamente significativo al livello del 5%.
+
+In termini quantitativi, la stima del coefficiente suggerisce che un incremento unitario della dimensione **Personal.Rights** è associato, in media, a un aumento del punteggio complessivo di progresso sociale compreso tra circa 0.40 e 0.54 punti. Questo risultato evidenzia una relazione positiva solida tra le due variabili analizzate.
+
+## Grafici diagnostici del modello semplice
+
+### Scatter plot con retta di regressione
+
+```{r}
+plot(data$Personal.Rights, data$Social.Progress.Score,
+     main = "Social Progress Score vs Personal Rights",
+     xlab = "Personal Rights",
+     ylab = "Social Progress Score",
+     pch = 16, col = "darkblue")
+
+abline(fit1, col = "red", lwd = 2)
+
+```
+
+Il grafico di dispersione evidenzia una chiara relazione positiva tra **Personal Rights** e il **Social Progress Score**. All’aumentare del punteggio relativo ai diritti personali si osserva, in media, un incremento del livello complessivo di progresso sociale.
+
+La retta di regressione stimata descrive adeguatamente la tendenza centrale dei dati, confermando l’esistenza di un’associazione lineare crescente tra le due variabili. La dispersione dei punti attorno alla retta risulta moderata, suggerendo che **Personal Rights** spiega una quota rilevante, ma non totale, della variabilità del **Social Progress Score**.
+
+Non emergono evidenti deviazioni sistematiche dalla linearità né la presenza di outlier estremi in grado di influenzare in modo significativo la stima del modello. Nel complesso, il grafico supporta l’adeguatezza del modello di regressione lineare semplice come prima approssimazione della relazione tra le due variabili.
+
+
+## Residui vs valori stimati
+
+```{r}
+Yhat <- fitted(fit1)
+res  <- residuals(fit1)
+
+plot(Yhat, res,
+main = "Residui vs Valori Stimati",
+xlab = "Valori Predetti",
+ylab = "Residui",
+pch = 19, col = "navy")
+abline(h = 0, col = "red", lty = 2)
+
+```
+
+Il grafico dei residui rispetto ai valori stimati mostra una distribuzione dei residui mediamente centrata attorno allo zero, suggerendo l’assenza di un bias sistematico nella stima dei valori attesi del **Social Progress Score**.
+
+Tuttavia, si osserva una variazione non costante della dispersione dei residui al variare dei valori predetti: in particolare, la varianza dei residui risulta più elevata per valori intermedi del punteggio stimato e tende a ridursi per valori più elevati. Questo pattern è indicativo di una possibile eteroschedasticità.
+
+Non emergono evidenti strutture di tipo non lineare, suggerendo che l’ipotesi di linearità del modello sia ragionevole. Nel complesso, il grafico fornisce evidenza a favore dell’adeguatezza funzionale del modello, pur segnalando una violazione dell’ipotesi di omoschedasticità, in linea con l’esito del test di Breusch–Pagan.
+
+
+## Osservati vs predetti
+
+```{r}
+
+plot(data$Social.Progress.Score, Yhat,
+     main = "Osservati vs Predetti",
+     xlab = "Score osservato",
+     ylab = "Score predetto",
+     col = "blue", pch = 16)
+
+abline(a = 0, b = 1, col = "red")
+
+
+```
+
+Il grafico di confronto tra i valori osservati e quelli predetti dal modello evidenzia una relazione positiva prossima alla bisettrice, indicando una buona capacità del modello di riprodurre i valori effettivamente osservati del **Social Progress Score**.
+
+La maggior parte delle osservazioni si dispone in prossimità della retta di riferimento a 45°, suggerendo che le previsioni del modello risultano complessivamente accurate. Tuttavia, si osserva una dispersione non trascurabile attorno alla bisettrice, soprattutto per valori intermedi del punteggio osservato, a indicare la presenza di una quota di variabilità non spiegata dal modello.
+
+Nel complesso, il grafico conferma che il modello di regressione lineare semplice fornisce una rappresentazione adeguata della relazione tra **Personal Rights** e **Social Progress Score**, pur non catturando completamente l’eterogeneità dei dati.
+
+
+## Q-Q plot dei residui
+
+```{r}
+qqnorm(res, main = "Q-Q plot residui")
+qqline(res, col = "red", lwd = 2)
+
+```
+
+Il Q–Q plot dei residui mostra un buon allineamento dei punti alla retta teorica, in particolare nella parte centrale della distribuzione. Questo suggerisce che l’ipotesi di normalità dei residui risulta complessivamente plausibile per il modello considerato.
+
+Si osservano tuttavia lievi deviazioni dalla linearità nelle code, soprattutto per i quantili estremi, indicando la presenza di una moderata asimmetria o di code leggermente più pesanti rispetto alla distribuzione normale teorica.
+
+Nel complesso, tali deviazioni non appaiono sufficientemente marcate da compromettere in modo significativo l’inferenza statistica, soprattutto considerando la dimensione campionaria e il fatto che le principali conclusioni vengono supportate anche dall’utilizzo di errori standard robusti.
+
+## Test statistici (modello semplice)
+
+Dopo la stima del modello di regressione lineare semplice, vengono effettuati test statistici sui residui al fine di verificare le principali ipotesi del modello lineare. In particolare, si analizzano la normalità e l’omoschedasticità degli errori, condizioni necessarie per garantire la correttezza dell’inferenza statistica.
+
+## Test di Jarque-Bera (normalità residui)
+
+```{r}
+
+tseries::jarque.bera.test(res)
+
+```
+
+Il test di Jarque–Bera applicato ai residui del modello restituisce un p-value pari a 0.04383, inferiore al livello di significatività del 5%. Pertanto, si rifiuta l’ipotesi nulla di normalità dei residui, evidenziando una deviazione statisticamente significativa dalla distribuzione normale.
+
+Tuttavia, l’entità della violazione appare contenuta e coerente con quanto osservato nel Q–Q plot, che mostra un buon allineamento dei residui nella parte centrale della distribuzione e lievi deviazioni nelle code.
+
+Alla luce di questi risultati, l’assunzione di normalità risulta solo approssimativamente soddisfatta. Per questo motivo, al fine di garantire l’affidabilità dell’inferenza statistica, si fa ricorso all’utilizzo di errori standard robusti, che consentono di mitigare l’impatto delle violazioni delle ipotesi classiche del modello lineare.
+
+## Test di Breusch-Pagan (omoschedasticità)
+
+```{r}
+lmtest::bptest(fit1)
+
+```
+
+Il test di Breusch–Pagan applicato al modello restituisce un p-value pari a 0.009388, inferiore al livello di significatività del 5%. Pertanto, si rifiuta l’ipotesi nulla di omoschedasticità, indicando la presenza di eteroschedasticità nei residui del modello.
+
+Questa evidenza suggerisce che la varianza degli errori non è costante lungo i valori stimati della variabile risposta. Di conseguenza, al fine di rendere l’inferenza statistica più affidabile, risulta opportuno fare riferimento a errori standard robusti, che consentono di ottenere stime corrette delle statistiche test anche in presenza di eteroschedasticità.
+
+## Soluzione all’eteroschedasticità: errori standard robusti
+
+Nonostante la presenza di eteroschedasticità, le stime dei coefficienti ottenute tramite OLS rimangono corrette; tuttavia, le statistiche inferenziali standard potrebbero risultare distorte. Per questo motivo si procede al calcolo di errori standard robusti di tipo HC1:
+
+```{r}
+lmtest::coeftest(fit1, vcov. = sandwich::vcovHC(fit1, type = "HC1"))
+
+```
+
+I risultati del test t basato su errori standard robusti di tipo HC1 indicano che entrambi i parametri del modello risultano statisticamente significativi anche dopo la correzione per l’eteroschedasticità.
+
+In particolare, il coefficiente associato alla variabile **Personal.Rights** mantiene un p-value inferiore a 0.001, evidenziando un effetto positivo e statisticamente significativo sul **Social Progress Score**. Questo conferma la robustezza della relazione stimata e suggerisce che la significatività del coefficiente non è un artefatto della violazione dell’ipotesi di omoschedasticità.
+
+L’adozione di errori standard robusti consente pertanto di rendere l’inferenza statistica più affidabile, senza modificare le stime puntuali dei coefficienti ottenute tramite OLS.
+
+\newpage
+# Modello di Regressione Lineare Multiplo
+
+Al fine di valutare se l’inclusione di un’ulteriore variabile esplicativa consenta di migliorare la capacità del modello di spiegare la variabilità dell’indice di progresso sociale, viene stimato un modello di regressione lineare multiplo con due regressori.
+
+In particolare, vengono selezionate:
+
+- **Personal.Rights**
+
+- **Environmental.Quality** 
+
+```{r}
+fit2 <- lm(Social.Progress.Score~Personal.Rights+Environmental.Quality, data=data) 
+summary(fit2)
+
+```
+
+Dai risultati del modello di regressione lineare multiplo emerge che entrambe le variabili esplicative, **Personal.Rights** ed **Environmental.Quality**, risultano statisticamente significative al livello dell’1%. Questo consente di rifiutare l’ipotesi nulla secondo cui i coefficienti associati alle due variabili siano pari a zero, indicando un contributo informativo rilevante nella spiegazione del **Social Progress Score**.
+
+L’intercetta del modello è stimata pari a circa 19.79 e rappresenta il valore atteso del **Social Progress Score** nel caso in cui le variabili **Personal.Rights** ed **Environmental.Quality** assumano valore pari a zero.
+
+A parità delle altre variabili, un incremento unitario di **Personal.Rights** è associato, in media, a un aumento di circa 0.29 punti nel **Social Progress Score**, mentre un incremento unitario di **Environmental.Quality** è associato a un aumento medio di circa 0.45 punti.
+
+Il test F complessivo del modello risulta altamente significativo, portando al rifiuto dell’ipotesi nulla che prevede un modello con la sola intercetta. Questo risultato conferma la rilevanza complessiva del modello stimato.
+
+Il valore di R2 è pari a 0.5912, mentre quello di R2 corretto è pari a 0.5862. Rispetto al modello di regressione semplice si osserva un miglioramento della capacità esplicativa. 
+Inoltre, la differenza contenuta tra R2 e R2 corretto suggerisce che l’inclusione della seconda variabile esplicativa contribuisce in modo significativo a spiegare la variabilità del **Social Progress Score**, senza introdurre un’eccessiva complessità nel modello.
+
+## Confronto R² adjusted (fit1 vs fit2)
+
+Per valutare il contributo informativo della seconda variabile esplicativa, si confrontano i valori dell’
+R2 corretto del modello di regressione semplice (fit1) e del modello di regressione multipla (fit2).
+
+```{r}
+cbind(
+  Fit2 = summary(fit2)$adj.r.squared,
+  Fit1 = summary(fit1)$adj.r.squared
+)
+
+
+```
+
+Il valore dell’R^2 corretto del modello con due regressori risulta superiore rispetto a quello del modello con una sola variabile esplicativa, indicando che l’inclusione della variabile **Environmental.Quality** contribuisce in modo sostanziale a migliorare la capacità del modello di spiegare la variabilità della variabile risposta, senza introdurre un’eccessiva complessità.
+
+Alla luce di questo confronto, il modello di regressione lineare multiplo risulta preferibile rispetto al modello semplice.
+
+
+## VIF (collinearità)
+
+```{r}
+
+car::vif(fit2)
+
+
+```
+I valori del VIF associati alle variabili **Personal.Rights** ed **Environmental.Quality** risultano pari a circa 1.83. Poiché tali valori sono nettamente inferiori alle soglie comunemente utilizzate per segnalare problemi di multicollinearità, non emergono evidenze di collinearità rilevante tra i regressori.
+
+Di conseguenza, le stime dei coefficienti del modello possono essere considerate stabili e affidabili dal punto di vista interpretativo, e la significatività delle variabili non risulta influenzata da fenomeni di multicollinearità.
+
+## Risoluzione dell’eteroschedasticità
+
+```{r}
+bptest(fit2)
+```
+
+Il test di Breusch–Pagan applicato al modello di regressione lineare multiplo restituisce un p-value pari a 2.634e-06, ampiamente inferiore al livello di significatività del 5%. Pertanto, si rifiuta l’ipotesi nulla di omoschedasticità, evidenziando la presenza di eteroschedasticità nei residui del modello.
+
+Questo risultato indica che la varianza degli errori non è costante al variare dei valori stimati della variabile risposta. Di conseguenza, al fine di rendere le inferenze statistiche più attendibili, si rende necessario il ricorso a errori standard robusti, che consentono di correggere le statistiche test mantenendo invariate le stime puntuali dei coefficienti.
+
+```{r}
+coeftest(fit2, vcov. = sandwich::vcovHC(fit2, type = "HC1"))
+```
+
+I risultati del test t basato su errori standard robusti di tipo HC1 mostrano che tutti i coefficienti del modello rimangono statisticamente significativi anche dopo la correzione per l’eteroschedasticità. In particolare, le variabili **Personal.Rights** ed **Environmental.Quality** presentano p-value ampiamente inferiori al livello di significatività del 5%, confermando la rilevanza del loro effetto sul **Social Progress Score**.
+
+Il confronto con le stime ottenute tramite errori standard classici evidenzia che, sebbene gli errori standard risultino leggermente più elevati, le conclusioni inferenziali non cambiano. Ciò suggerisce che la significatività dei coefficienti non è dovuta a una sottostima della varianza degli errori, ma riflette una relazione robusta tra le variabili esplicative e la variabile risposta.
+
+L’adozione di errori standard robusti consente pertanto di rendere le inferenze statistiche più attendibili in presenza di eteroschedasticità, senza alterare le stime puntuali dei coefficienti del modello.
+
+\newpage
+# Regressione multipla con variabile dummy (dummy = cluster)
+
+Viene introdotta una variabile dummy che assume valore pari a 1 nel caso in cui il Paese appartenga al cluster 1, mentre assume valore 0 se il Paese è assegnato al cluster 2.
+
+```{r}
+data$ClusterDummy <- ifelse(cluster == 1, 1, 0)
+
+```
+
+Una volta definita la variabile categoriale possiamo procedere con la stima del nuovo modello di regressione:
+
+```{r}
+fit3 <- lm(Social.Progress.Score~Personal.Rights 
++Environmental.Quality+ClusterDummy, data=data) 
+summary(fit3)
+```
+
+Dai risultati del modello di regressione lineare che include la variabile dummy di cluster emerge che tutte le variabili esplicative risultano statisticamente significative al livello dell’1%. Questo consente di rifiutare l’ipotesi nulla secondo cui i coefficienti associati alle variabili **Personal.Rights**, **Environmental.Quality** e ClusterDummy siano pari a zero, evidenziando un contributo informativo rilevante di tutte le covariate incluse nel modello.
+
+L’intercetta del modello è stimata pari a circa 24.53 e rappresenta il valore atteso del **Social Progress Score** per un Paese appartenente al cluster di riferimento, nel caso in cui le variabili **Personal.Rights** ed **Environmental.Quality** assumano valore pari a zero.
+
+A parità delle altre variabili, un incremento unitario di **Personal.Rights** è associato, in media, a un aumento di circa 0.11 punti nel **Social Progress Score**, mentre un incremento unitario di **Environmental.Quality** è associato a un aumento medio di circa 0.37 punti.
+
+L’interpretazione della variabile dummy è differente rispetto alle variabili quantitative: il coefficiente stimato indica che i Paesi appartenenti al cluster 1 presentano, in media, un **Social Progress Score** superiore di circa 18.32 punti rispetto ai Paesi del cluster di riferimento, a parità di **Personal.Rights** ed **Environmental.Quality**. Questo risultato evidenzia un marcato effetto strutturale legato all’appartenenza al cluster.
+
+Il test F complessivo del modello risulta altamente significativo, portando al rifiuto dell’ipotesi nulla di un modello con la sola intercetta. I valori di R2 e R2 corretto risultano particolarmente elevati, pari rispettivamente a 0.843 e 0.8401, indicando che il modello spiega una quota molto ampia della variabilità del **Social Progress Score**. Inoltre, la ridotta differenza tra R2 e R2 corretto suggerisce che l’inclusione della variabile dummy migliora in modo sostanziale la capacità esplicativa del modello senza introdurre eccessiva complessità.
+
+## Diagnostica e correzione
+
+```{r}
+vif(fit3)
+```
+
+I valori del VIF calcolati per il modello fit3 risultano pari a circa 2.11 per **Personal.Rights**, 1.85 per **Environmental.Quality** e 1.40 per **ClusterDummy**. Poiché tutti i valori sono ampiamente inferiori alle soglie comunemente utilizzate per segnalare multicollinearità problematica, non emergono evidenze di collinearità rilevante tra i regressori.
+
+In termini interpretativi, questi risultati indicano che le tre variabili non presentano sovrapposizione informativa tale da gonfiare in modo significativo le varianze stimate dei coefficienti. Di conseguenza, le stime dei coefficienti possono essere considerate stabili e l’inferenza statistica risulta affidabile dal punto di vista della multicollinearità.
+
+```{r}
+bptest(fit3)
+```
+
+
+Il test di Breusch–Pagan applicato al modello di regressione con variabile dummy restituisce un p-value pari a 0.0001586, nettamente inferiore al livello di significatività del 5%. Pertanto, si rifiuta l’ipotesi nulla di omoschedasticità, evidenziando la presenza di eteroschedasticità nei residui del modello.
+
+Questa violazione non compromette la correttezza delle stime puntuali dei coefficienti ottenute tramite OLS, ma può incidere sull’affidabilità degli errori standard e, di conseguenza, sulle inferenze statistiche basate su di essi. Per questo motivo, al fine di rendere le inferenze più attendibili, si procede alla stima del modello utilizzando errori standard robusti.
+
+```{r}
+coeftest(fit3, vcov. = sandwich::vcovHC(fit3, type = "HC1"))
+```
+
+I risultati del test t basato su errori standard robusti di tipo HC1 mostrano che tutti i coefficienti del modello rimangono statisticamente significativi anche dopo la correzione per l’eteroschedasticità. In particolare, le variabili **Personal.Rights**, **Environmental.Quality** e **ClusterDummy** presentano p-value ampiamente inferiori al livello di significatività del 5%, confermando la rilevanza dei loro effetti sul **Social Progress Score**.
+
+Il confronto con le stime ottenute tramite errori standard classici evidenzia che, pur in presenza di un aumento degli errori standard, le conclusioni inferenziali non cambiano. Ciò indica che la significatività dei coefficienti non è un artefatto della violazione dell’ipotesi di omoschedasticità, ma riflette relazioni strutturali robuste tra le variabili esplicative e la variabile risposta.
+
+L’adozione di errori standard robusti consente pertanto di rendere le inferenze statistiche più attendibili, garantendo la solidità dei risultati anche in presenza di varianza non costante dei residui.
+
+
+\newpage
+# Conclusioni (SPI 2022)
+
+L’analisi del Social Progress Index 2022 ha messo in luce differenze marcate tra i Paesi, non solo in termini di punteggio complessivo, ma anche rispetto alle singole dimensioni che definiscono il progresso sociale. L’analisi esplorativa dei dati ha evidenziato una forte eterogeneità tra i Paesi e relazioni strutturate tra gli indicatori, suggerendo fin dalle prime fasi la presenza di una componente comune sottostante.
+
+L’Analisi delle Componenti Principali ha confermato questa evidenza, mostrando che una quota molto elevata della variabilità totale può essere spiegata da poche componenti latenti. In particolare, la prima componente sintetizza un fattore generale di progresso sociale, mentre la seconda distingue differenti configurazioni qualitative, legate al bilanciamento tra diritti, inclusione, qualità ambientale e condizioni di benessere di base.
+
+I risultati del clustering risultano coerenti con tali evidenze, permettendo di individuare due gruppi principali di Paesi: un cluster caratterizzato da livelli elevati e omogenei di progresso sociale e un cluster più fragile, contraddistinto da punteggi inferiori e da una maggiore eterogeneità interna. Questa suddivisione riflette un chiaro divario strutturale nel progresso sociale a livello globale.
+
+Infine, i modelli di regressione hanno consentito di quantificare in modo diretto le relazioni tra alcune dimensioni chiave dell’indice e il punteggio complessivo. In particolare, variabili come Personal.Rights ed Environmental.Quality mostrano un’associazione positiva e statisticamente significativa con il Social Progress Score, mentre l’introduzione della variabile dummy di cluster evidenzia un marcato effetto strutturale legato all’appartenenza dei Paesi ai diversi gruppi individuati. Anche in presenza di violazioni delle ipotesi classiche del modello lineare, l’utilizzo di errori standard robusti garantisce l’affidabilità dell’inferenza statistica.
+
+Nel complesso, l’analisi evidenzia come il progresso sociale sia un fenomeno multidimensionale e fortemente interconnesso, nel quale miglioramenti in ambiti chiave quali diritti, qualità ambientale e inclusione si riflettono in modo diretto sul livello complessivo di sviluppo sociale dei Paesi.
+
+
+
